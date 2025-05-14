@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 setup(
     name='flex_rnn',
     version='0.1',
-    description='Generate cuda kernels for linear attention mechanisms like RWKV or Mamba',
+    description='Generate cuda kernels for linear attention mechanisms like RWKV and Mamba',
     author='Johan Sokrates Wind',
     author_email='johanswi@uio.no',
     url='https://github.com/johanwind/flex_rnn',

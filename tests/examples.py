@@ -25,10 +25,11 @@ op = cmd_args.op
 B,T,M,C = cmd_args.batchsz, cmd_args.seqlen, cmd_args.modeldim, cmd_args.headsz
 H = M//C
 
+do_backward = not cmd_args.forward
+need_ref = not (cmd_args.benchmark_flex or cmd_args.check_flex)
+
 print('Testing', op)
 print(f'Input sizes {B=}, {T=}, {H=}, {C=}')
-
-do_backward = not cmd_args.forward
 
 assert op in ['rwkv7', 'rwkv6', 'gla', 'retention', 'delta_rule', 'gated_delta_rule', 'mamba2', 'longhorn', 'rwkv4', 'hgrn', 'mamba', 's4d', 'gsa', 'mlstm']
 
@@ -40,11 +41,11 @@ if op == 'rwkv7':
     b = -a*th.sigmoid(b)
     s = th.randn(B,H,C,C)
     inputs = (q,w,k,v,a,b,s)
-    #inputs = tuple(th.stack((i,i.clone()),dim=-1)[...,0] for i in inputs)
 
-    from fla.ops.rwkv7 import chunk_rwkv7
-    def ref(q,w,k,v,a,b,s):
-        return chunk_rwkv7(q,w,k,v,a,b,1,s,True)
+    if need_ref:
+        from fla.ops.rwkv7 import chunk_rwkv7
+        def ref(q,w,k,v,a,b,s):
+            return chunk_rwkv7(q,w,k,v,a,b,1,s,True)
 
     @flex_rnn.jit
     def step(q,w,k,v,a,b,s):
@@ -64,9 +65,10 @@ elif op == 'rwkv6':
     s = th.randn(B,H,C,C)
     inputs = (q,k,v,w,u,s)
 
-    from fla.ops.rwkv6 import chunk_rwkv6
-    def ref(q,k,v,w,u,s):
-        return chunk_rwkv6(q,k,v,w,u,1,s,True)
+    if need_ref:
+        from fla.ops.rwkv6 import chunk_rwkv6
+        def ref(q,k,v,w,u,s):
+            return chunk_rwkv6(q,k,v,w,u,1,s,True)
 
     @flex_rnn.jit
     def step(q,k,v,w,u,s):
@@ -86,9 +88,10 @@ elif op == 'gla':
     s = th.randn(B,H,C,C)
     inputs = (q,k,v,g,s)
 
-    from fla.ops.gla import chunk_gla
-    def ref(q,k,v,g,s):
-        return chunk_gla(q,k,v,g,1,s,True)
+    if need_ref:
+        from fla.ops.gla import chunk_gla
+        def ref(q,k,v,g,s):
+            return chunk_gla(q,k,v,g,1,s,True)
 
     @flex_rnn.jit
     def step(q,k,v,g,s):
@@ -106,9 +109,10 @@ elif op == 'retention':
     s = th.randn(B,H,C,C)
     inputs = (q,k,v,s)
 
-    from fla.ops.retention import chunk_retention
-    def ref(q,k,v,s):
-        return chunk_retention(q,k,v,1,s,True)
+    if need_ref:
+        from fla.ops.retention import chunk_retention
+        def ref(q,k,v,s):
+            return chunk_retention(q,k,v,1,s,True)
 
     @flex_rnn.jit
     def step(w,q,k,v,s):
@@ -129,9 +133,10 @@ elif op == 'delta_rule':
     s = th.randn(B,H,C,C)
     inputs = (q,k,v,beta,s)
 
-    from fla.ops.delta_rule import chunk_delta_rule
-    def ref(q,k,v,beta,s):
-        return chunk_delta_rule(q,k,v,beta,1,s,True)
+    if need_ref:
+        from fla.ops.delta_rule import chunk_delta_rule
+        def ref(q,k,v,beta,s):
+            return chunk_delta_rule(q,k,v,beta,1,s,True)
 
     @flex_rnn.jit
     def step(q,k,v,beta,s):
@@ -152,9 +157,10 @@ elif op == 'gated_delta_rule':
     s = th.randn(B,H,C,C)
     inputs = (q,k,v,g,beta,s)
 
-    from fla.ops.gated_delta_rule import chunk_gated_delta_rule
-    def ref(q,k,v,g,beta,s):
-        return chunk_gated_delta_rule(q,k,v,g,beta,1,s,True)
+    if need_ref:
+        from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+        def ref(q,k,v,g,beta,s):
+            return chunk_gated_delta_rule(q,k,v,g,beta,1,s,True)
 
     @flex_rnn.jit
     def step(q,k,v,g,beta,s):
@@ -177,9 +183,10 @@ elif op == 'mamba2':
     s = th.randn(B,H,C,C)
     inputs = (x,dt,A,b,c,s)
 
-    from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
-    def ref(x,dt,A,b,c,s):
-        return mamba_chunk_scan_combined(x,dt,A,b,c, chunk_size=256, initial_states=s, return_final_states=True)
+    if need_ref:
+        from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
+        def ref(x,dt,A,b,c,s):
+            return mamba_chunk_scan_combined(x,dt,A,b,c, chunk_size=256, initial_states=s, return_final_states=True)
 
     @flex_rnn.jit
     def step(x,dt,A,b,c,s):
@@ -199,10 +206,11 @@ elif op == 'longhorn':
     dt = th.randn(B,H*C,T)
     inputs = (u,q,k,dt)
 
-    import warnings
-    warnings.simplefilter("ignore", FutureWarning)
-    from longhorn.ops.selective_scan_interface import selective_scan_online7_fn # from https://github.com/Cranial-XIX/longhorn_cuda
-    ref = selective_scan_online7_fn
+    if need_ref:
+        import warnings
+        warnings.simplefilter("ignore", FutureWarning)
+        from longhorn.ops.selective_scan_interface import selective_scan_online7_fn # from https://github.com/Cranial-XIX/longhorn_cuda
+        ref = selective_scan_online7_fn
 
     @flex_rnn.jit
     def step(u,q,k,dt,s):
@@ -226,8 +234,9 @@ elif op == 'rwkv4':
     s[:,2] = -1e30
     inputs = (w,u,k,v,s)
 
-    from fla.ops.rwkv4 import fused_recurrent_rwkv4
-    ref = fused_recurrent_rwkv4
+    if need_ref:
+        from fla.ops.rwkv4 import fused_recurrent_rwkv4
+        ref = fused_recurrent_rwkv4
 
     @flex_rnn.jit
     def step(w,u,k,v, sa,sb,sc):
@@ -257,9 +266,10 @@ elif op == 'hgrn':
     g = -th.sigmoid(th.randn(B,T,M))
     inputs = (x,g)
 
-    from fla.ops.hgrn import chunk_hgrn
-    def ref(x,g):
-        return chunk_hgrn(x,g)[0]
+    if need_ref:
+        from fla.ops.hgrn import chunk_hgrn
+        def ref(x,g):
+            return chunk_hgrn(x,g)[0]
 
     @flex_rnn.jit
     def step(x,g,s):
@@ -281,8 +291,9 @@ elif op == 'mamba':
     c = th.randn(B,N,T)
     inputs = (u,dt,A,b,c)
 
-    from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
-    ref = selective_scan_fn
+    if need_ref:
+        from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
+        ref = selective_scan_fn
 
     @flex_rnn.jit
     def step(u,dt,A,b,c,s):
@@ -320,8 +331,8 @@ elif op == 's4d':
     def flex(u, log_dt, A_real, A_imag, b, c, D):
         dt = log_dt.exp()
         A = -(A_real.exp() + 1j*A_imag)
-        Q = th.view_as_complex(c[0]) * th.view_as_complex(b[0]) * ((dt*A).exp()-1.) / A * 2
         dA = (dt*A).exp()
+        Q = th.view_as_complex(c[0]) * th.view_as_complex(b[0]) * (dA-1.) / A * 2
 
         u = u[:,:,None,:,None]
         Ar,Ai,Qr,Qi,D = [i[None,None,None] for i in [dA.real,dA.imag,Q.real,Q.imag,D]]
@@ -335,12 +346,13 @@ elif op == 'gsa':
     sa,sb = [th.randn(B,H,C,C)*0 for i in range(2)]
     inputs = (q,k,v,x,g,sa,sb)
 
-    from fla.ops.gsa import chunk_gsa # Quite inaccurate (~4% error)
-    #from fla.ops.gsa import fused_recurrent_gsa # More accurate, but slower
-    def ref(q,k,v,x,g,sa,sb):
-        #return fused_recurrent_gsa(q,k,v,x,g,1,(sa,sb))[0] # Can't backprop with output_final_state
-        y,(sa,sb) = chunk_gsa(q,k,v,x,g,1,(sa,sb),True)
-        return y,sa,sb
+    if need_ref:
+        from fla.ops.gsa import chunk_gsa # Quite inaccurate (~4% error)
+        #from fla.ops.gsa import fused_recurrent_gsa # More accurate, but slower
+        def ref(q,k,v,x,g,sa,sb):
+            #return fused_recurrent_gsa(q,k,v,x,g,1,(sa,sb))[0] # Can't backprop with output_final_state
+            y,(sa,sb) = chunk_gsa(q,k,v,x,g,1,(sa,sb),True)
+            return y,sa,sb
 
     @flex_rnn.jit
     def step1(q,k,x,g,s):
@@ -368,17 +380,18 @@ elif op == 'mlstm':
     sc = th.randn(B,H,1)
     inputs = (q,k,v,i,f,sa,sb,sc)
 
-    if 1: # Fast, but gives wrong gradients
-        from mlstm_kernels.torch.chunkwise.triton_xl_chunk import mlstm_chunkwise__xl_chunk
-        def ref(q,k,v,i,f,sa,sb,sc):
-            y,(sa,sb,sc) = mlstm_chunkwise__xl_chunk(q,k,v,i,f, sa,sb,sc, return_last_states=True, chunk_size=256)
-            return y,sa,sb,sc
-    else:
-        #from mlstm_kernels.torch.chunkwise.native import mlstm_chunkwise__native_autograd
-        from mlstm_kernels.torch.recurrent import mlstm_recurrent_sequence__native_fw
-        def ref(q,k,v,i,f,sa,sb,sc):
-            y,(sa,sb,sc) = mlstm_recurrent_sequence__native_fw(q,k,v,i,f, sa,sb,sc, return_last_states=True)
-            return y,sa,sb,sc
+    if need_ref:
+        if 1: # Fast, but gives wrong gradients
+            from mlstm_kernels.torch.chunkwise.triton_xl_chunk import mlstm_chunkwise__xl_chunk
+            def ref(q,k,v,i,f,sa,sb,sc):
+                y,(sa,sb,sc) = mlstm_chunkwise__xl_chunk(q,k,v,i,f, sa,sb,sc, return_last_states=True, chunk_size=256)
+                return y,sa,sb,sc
+        else:
+            #from mlstm_kernels.torch.chunkwise.native import mlstm_chunkwise__native_autograd
+            from mlstm_kernels.torch.recurrent import mlstm_recurrent_sequence__native_fw
+            def ref(q,k,v,i,f,sa,sb,sc):
+                y,(sa,sb,sc) = mlstm_recurrent_sequence__native_fw(q,k,v,i,f, sa,sb,sc, return_last_states=True)
+                return y,sa,sb,sc
 
     def maximum(a,b): return a+(b-a)*(b>a).float()
 
@@ -419,9 +432,9 @@ else:
 
 if cmd_args.benchmark_flex:
     print('Benchmarking flex compiled kernel')
-    if not op in ['s4d']:
+    if not op in ['s4d','mamba']:
         inputs = tuple(i.to(th.bfloat16) for i in inputs)
-    if cmd_args.torch_compile: flex = th.compile(flex, fullgraph=True)
+    if cmd_args.torch_compile: flex = th.compile(flex)
     flex_rnn.benchmark(flex, inputs, backward=do_backward)
 
 elif cmd_args.benchmark_ref:
@@ -437,7 +450,7 @@ elif cmd_args.check_flex:
             step.apply = step.naive_fp64
         return flex(*args)
     print('Verifying flex compiled kernel')
-    flex_ = th.compile(flex, fullgraph=True) if cmd_args.torch_compile else flex
+    flex_ = th.compile(flex) if cmd_args.torch_compile else flex
     flex_rnn.check_grad(flex_, ref, inputs, backward=do_backward)
 
 elif cmd_args.check_ref:
@@ -449,5 +462,5 @@ elif cmd_args.check_ref:
 
 else:
     print('Comparing flex compiled kernel to reference')
-    if cmd_args.torch_compile: flex = th.compile(flex, fullgraph=True)
+    if cmd_args.torch_compile: flex = th.compile(flex)
     flex_rnn.check_grad(flex, ref, inputs, backward=do_backward)

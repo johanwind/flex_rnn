@@ -81,3 +81,13 @@ class jit:
 
         apply.register_autograd(backward, setup_context=setup_context)
         return lambda *args : apply(*args)[:self.noutputs+self.nstates]
+
+def simplified_naive(step, *args):
+    inputs, state = args[:-1], args[-1]
+    T = max(i.shape[1] for i in inputs)
+    output = []
+    for t in range(T):
+        inputs_t = [i.expand(-1,T,-1,-1,-1)[:,t].float() for i in inputs]
+        output_t, state = step(*inputs_t, state)
+        output.append(output_t)
+    return th.stack(output, dim=1).squeeze(-1), state
