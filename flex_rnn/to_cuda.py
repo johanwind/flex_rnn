@@ -236,7 +236,7 @@ def build_cuda(*args):
     for src,grid,threads in args:
         args,mutable,types = [],[],[]
         for i in src.split('void ')[-1].split('(')[1].split(')')[0].split(', '):
-            mutable.append('__restrict__ ' in i)
+            mutable.append('__restrict__ ' not in i)
             args.append(i.split()[-1])
             types.append(i.split()[0])
         func_name = src.split('void ')[-1].split('(')[0]

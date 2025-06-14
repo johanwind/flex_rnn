@@ -343,7 +343,7 @@ elif op == 's4d':
 elif op == 'gsa':
     q,k,v,x,g = [th.randn(B,T,H,C,dtype=th.bfloat16) for i in range(5)]
     g = -th.sigmoid(g)
-    sa,sb = [th.randn(B,H,C,C)*0 for i in range(2)]
+    sa,sb = [th.randn(B,H,C,C) for i in range(2)]
     inputs = (q,k,v,x,g,sa,sb)
 
     if need_ref:
