@@ -38,7 +38,7 @@ def to_cuda(graph):
                 src +=f'float {lhs};\n'
 
         op = node.op.split('.')[0]
-        unary = {'exp': '__expf', 'clone': '', 'neg': '-', 'reciprocal': '1.f/', 'log': '__logf', 'zeros_like': '0*', 'sqrt': '__fsqrt_rn'}
+        unary = {'exp': '__expf', 'clone': '', 'neg': '-', 'reciprocal': '1.f/', 'log': '__logf', 'ones_like': '1; //', 'zeros_like': '0; //', 'sqrt': '__fsqrt_rn'}
         binary = {'mul': '*', 'add': '+', 'sub': '-', 'div': '/', 'lt': '<', 'gt': '>'}
         if op in unary:
             opname = unary[op]

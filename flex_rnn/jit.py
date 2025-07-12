@@ -5,11 +5,12 @@ import inspect, uuid
 from flex_rnn.twopass import build_twopass, split_list, verify_meta
 
 class jit:
-    def __init__(self, step):
+    def __init__(self, step, n_step_args = None):
         self.step = step
         self.forward_func = self.backward_func = None
 
-        n_step_args = len(inspect.signature(self.step).parameters)
+        if n_step_args is None:
+            n_step_args = len(inspect.signature(self.step).parameters)
         y,s = self.step(*[th.empty(1,1, device='meta') for i in range(n_step_args)])
         self.noutputs, self.nstates = len(y), len(s)
         self.ninputs = n_step_args - self.nstates
